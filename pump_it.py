@@ -10,11 +10,10 @@ import hashlib
 import time
 from urllib.parse import urlencode
 
-binance_keys = {
-  'api_key': 'JtmfocM5W6E1TIOrDhwNg8ZMsmIIQcb5IBm44jD4uXgWZ0BRjcqmJUAJ7amdVoBQ',
-  'secret_key': 'iRrBQlQzBinw4BlljezyRnvZdFM6CxhC6StGc0WBSD2qFztdi8Q4reF1ItArTH9P'
-}
-coinmarketcap_key = '7556a774-23e5-467c-8b6c-bfde641899d0'
+keys = json.load(open('keys.json'))
+
+binance_keys = keys['binance']
+coinmarketcap_key =  keys['coinmarketcap']
 
 binance_base_url = 'https://api.binance.com/api/v3'
 coinmarketcap_url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
@@ -33,15 +32,19 @@ btc_buy_quantity = 0.0001
 def check_pair_price(pair, found_pumped_queue):
   previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
   current_thread = threading.currentThread()
+  
   while getattr(current_thread, 'pumped_pair_not_found', True):
     time.sleep(5)
-    current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])    
+    try:
+      current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
+      if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100):
+        found_pumped_queue.put((pair, current_pair_price))
+        return
 
-    if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100) or pair == 'OAXBTC':
-      found_pumped_queue.put((pair, current_pair_price))
-      return
-
-    previous_pair_price = current_pair_price
+      previous_pair_price = current_pair_price
+    except ConnectionError as e:
+      print('Connection error for pair ' + pair + ': ' + e)
+      print('Trying to reconnect')
 
 def make_orders(pair_info):
   current_thread = threading.currentThread()
@@ -90,7 +93,7 @@ def close_threads(threads):
     thread.pumped_pair_not_found = False
 
 try:
-  good_trading_pairs_grouped = {'SNM': ['BTC'], 'MDA': ['BTC'], 'MTH': ['BTC'], 'AST': ['BTC'], 'OAX': ['BTC'], 'EVX': ['BTC'], 'VIB': ['BTC', 'ETH'], 'RDN': ['BTC'], 'DLT': ['BTC'], 'AMB': ['BTC'], 'GVT': ['BTC'], 'QSP': ['BTC', 'ETH'], 'BTS': ['BTC', 'USDT'], 'CND': ['BTC']}
+  # good_trading_pairs_grouped = {'SNM': ['BTC'], 'MDA': ['BTC'], 'MTH': ['BTC'], 'AST': ['BTC'], 'OAX': ['BTC'], 'EVX': ['BTC'], 'VIB': ['BTC', 'ETH'], 'RDN': ['BTC'], 'DLT': ['BTC'], 'AMB': ['BTC'], 'GVT': ['BTC'], 'QSP': ['BTC', 'ETH'], 'BTS': ['BTC', 'USDT'], 'CND': ['BTC']}
 
   response = requests.get(coinmarketcap_url, params=coinmarketcap_parameters, headers=coinmarketcap_headers)
   low_market_symbols = [x['symbol'] for x in json.loads(response.text)['data']]
