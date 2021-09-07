@@ -1,5 +1,8 @@
+import threading
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 from threading import Thread
+import queue
+import math
 import requests
 import json
 import hmac
@@ -27,11 +30,68 @@ coinmarketcap_headers = {
 favorite_quote_order = ['BTC'] #, 'ETH', 'USDT']
 btc_buy_quantity = 0.0001
 
-thread_number = 5
-def check_order_status(open_orders):
-  print('I got ' + str(len(open_orders)) + ' open orders')
+def check_pair_price(pair, found_pumped_queue):
+  previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
+  current_thread = threading.currentThread()
+  while getattr(current_thread, 'pumped_pair_not_found', True):
+    time.sleep(5)
+    current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])    
+
+    if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100) or pair == 'OAXBTC':
+      found_pumped_queue.put((pair, current_pair_price))
+      return
+
+    previous_pair_price = current_pair_price
+
+def make_orders(pair_info):
+  current_thread = threading.currentThread()
+
+  order_params = {
+    'symbol': pair_info[0],
+    'side': 'BUY',
+    'type': 'MARKET',
+    'quantity': '%.0f' % (btc_buy_quantity / pair_info[1]),
+    'timestamp': round(time.time() * 1000 - 1000)
+  }
+  order_params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(order_params).encode('utf-8'), hashlib.sha256).hexdigest()
+
+  response = json.loads(requests.post(binance_base_url + '/order', params=order_params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
+  if 'code' in response and (response['code'] < 0 or response['code'] == 429):
+    print('\nMARKET order ERROR for pair ' + pair_info[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
+    print('Exiting...\n')
+    setattr(current_thread, 'error', True)
+    return
+
+  print('Pair ' + pair_info[0] + ' bought at market price!')
+  oco_order_params = {
+    'symbol': pair_info[0],
+    'side': 'SELL',            
+    'quantity': '%.0f' % math.ceil(btc_buy_quantity / (pair_info[1] - (pair_info[1] * 5/100))),
+    'price': ('%.8f' % (pair_info[1] + (pair_info[1]) * 50/100)).rstrip('0').rstrip('.'),
+    'stopPrice': ('%.8f' % (pair_info[1] - (pair_info[1] * 5/100))).rstrip('0').rstrip('.'),
+    'stopLimitPrice': ('%.8f' % (pair_info[1] - (pair_info[1] * 5/100))).rstrip('0').rstrip('.'),
+    'stopLimitTimeInForce': 'GTC',
+    'timestamp': round(time.time() * 1000 - 1000)
+  }
+  oco_order_params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(oco_order_params).encode('utf-8'), hashlib.sha256).hexdigest()
+  response = json.loads(requests.post(binance_base_url + '/order/oco', params=oco_order_params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
+  
+  if 'code' in response and (response['code'] < 0 or response['code'] == 429):
+    print('\nOCO SELL order ERROR for pair ' + pair_info[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
+    print('Exiting...\n')
+    setattr(current_thread, 'error', True)
+    return
+  
+  print('OCO ORDER for Pair ' + pair_info[0] + ' placed!')
+  return
+
+def close_threads(threads):
+  for thread in threads:
+    thread.pumped_pair_not_found = False
 
 try:
+  good_trading_pairs_grouped = {'SNM': ['BTC'], 'MDA': ['BTC'], 'MTH': ['BTC'], 'AST': ['BTC'], 'OAX': ['BTC'], 'EVX': ['BTC'], 'VIB': ['BTC', 'ETH'], 'RDN': ['BTC'], 'DLT': ['BTC'], 'AMB': ['BTC'], 'GVT': ['BTC'], 'QSP': ['BTC', 'ETH'], 'BTS': ['BTC', 'USDT'], 'CND': ['BTC']}
+
   response = requests.get(coinmarketcap_url, params=coinmarketcap_parameters, headers=coinmarketcap_headers)
   low_market_symbols = [x['symbol'] for x in json.loads(response.text)['data']]
 
@@ -45,115 +105,33 @@ try:
       good_trading_pairs_grouped[base] = [quote]
     else:
       good_trading_pairs_grouped[base].append(quote)
-
-  # good_trading_pairs_grouped = {'SNM': ['BTC'], 'MDA': ['BTC'], 'MTH': ['BTC'], 'AST': ['BTC'], 'OAX': ['BTC'], 'EVX': ['BTC'], 'VIB': ['BTC', 'ETH'], 'RDN': ['BTC'], 'DLT': ['BTC'], 'AMB': ['BTC'], 'GVT': ['BTC'], 'QSP': ['BTC', 'ETH'], 'BTS': ['BTC', 'USDT'], 'CND': ['BTC']}
-  
-  open_orders = []
+    
+  found_pumped_queue = queue.Queue()
+  threads = []
   for base in good_trading_pairs_grouped:
     for favorite_quote in favorite_quote_order:
       if favorite_quote in good_trading_pairs_grouped[base]:
-        print('Open binance trade with symbol: ' + base + favorite_quote)
-        pair_price =  float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + base + favorite_quote).text)['price'])
-        order_params = {
-          'symbol': base + favorite_quote,
-          'side': 'BUY',
-          'type': 'STOP_LOSS_LIMIT',
-          'timeInForce': 'GTC',
-          'quantity': '%.0f' % (btc_buy_quantity / pair_price),
-          'price': ('%.8f' % (pair_price + (pair_price * 10/100))).rstrip('0').rstrip('.'),
-          'stopPrice': ('%.8f' % (pair_price + (pair_price * 10/100))).rstrip('0').rstrip('.'),
-          'timestamp': round(time.time() * 1000 - 1000)
-        }
-        order_params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(order_params).encode('utf-8'), hashlib.sha256).hexdigest()
+        print('Checking pair: ' + base + favorite_quote)
+        threads.append(Thread(target=check_pair_price, args=(base + favorite_quote, found_pumped_queue,)))
+        threads[-1].start() 
 
-        response = json.loads(requests.post(binance_base_url + '/order', params=order_params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
-        if 'code' in response and response['code'] < 0:
-          print('BUY LIMIT order ERROR for pair ' + base + favorite_quote + ' -> code ' + str(response['code']) + ': ' + response['msg'])
-        elif 'code' in response and response['code'] == 429:
-          print('BUY LIMIT order limits exceeded ' + base + favorite_quote + ' -> code ' + str(response['code']) + ': ' + response['msg'])
-          print('Exiting...')
-          exit()
-        else:
-          open_orders.append((response['symbol'], response['orderId']))
-          time.sleep(0.5)
-        break
-  print('All trades opened\n')
-  print('DO NOT CLOSE THE PROMPT')
+  print('\nDO NOT CLOSE THE PROMPT')
   print('Checking out which coin will be pumped...\n')
+  pumped_pair_info = found_pumped_queue.get()
 
-  found_pumped = None
-  pumped_found = False
-  while not pumped_found:
-    for i in range(thread_number):
-      start_index = i * round(len(open_orders)/thread_number)
-      end_index = (i * round(len(open_orders)/thread_number)) + round(len(open_orders)/thread_number)
-      thread = Thread(target=check_order_status, args=(open_orders[start_index:end_index],))
-      thread.start() 
+  print('Pumped pair found!!!')
+  print(pumped_pair_info[0] + '\n')
+  t_make_orders = Thread(target=make_orders, args=(pumped_pair_info,))
+  t_close_threads = Thread(target=close_threads, args=(threads,))
 
-    for open_order in open_orders:
-      params = {
-        'symbol': open_order[0],
-        'orderId': open_order[1],
-        'timestamp': round(time.time() * 1000 - 1000)
-      }
-      params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(params).encode('utf-8'), hashlib.sha256).hexdigest()
-      currentOrder = json.loads(requests.get(binance_base_url + '/order', params=params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
+  t_make_orders.start()
+  t_close_threads.start()
+  t_close_threads.join()
+  t_make_orders.join()
 
-      if 'code' in currentOrder and currentOrder['code'] < 0:
-        print('GET order ERROR for pair ' + base + favorite_quote + ' -> code ' + str(currentOrder['code']) + ': ' + currentOrder['msg'])
-      elif 'code' in currentOrder and currentOrder['code'] == 429:
-        print('GET order limits exceeded ' + base + favorite_quote + ' -> code ' + str(currentOrder['code']) + ': ' + currentOrder['msg'])
-        print('Exiting...')
-        exit()
-      elif currentOrder['status']=='NEW':
-        print('Pumped pair found: ' + open_order[0])
-        pumped_found = True
-        found_pumped = open_order 
+  if not getattr(t_make_orders, 'error', False):
+    print('\nPump complete. Wait the OCO order to Take Profit or to Stop Loss')
+    print('Enjoy your money ;) bye bye!\n')
 
-        oco_order_params = {
-          'symbol': open_order[0],
-          'side': 'SELL',            
-          'quantity': currentOrder['origQty'],
-          'price': ('%.8f' % (float(currentOrder['price']) + (float(currentOrder['price']) * 50/100))).rstrip('0').rstrip('.'),
-          'stopPrice': ('%.8f' % (float(currentOrder['price']) - (float(currentOrder['price']) * 5/100))).rstrip('0').rstrip('.'),
-          'stopLimitPrice': ('%.8f' % (float(currentOrder['price']) - (float(currentOrder['price']) * 5/100))).rstrip('0').rstrip('.'),
-          'stopLimitTimeInForce': 'GTC',
-          'timestamp': round(time.time() * 1000 - 1000)
-        }
-        oco_order_params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(oco_order_params).encode('utf-8'), hashlib.sha256).hexdigest()
-        response = json.loads(requests.post(binance_base_url + '/order/oco', params=oco_order_params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
-        
-        if 'code' in response and response['code'] < 0:
-          print('OCO SELL order ERROR for pair ' + open_order[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
-          pumped_found = False
-        elif 'code' in response and response['code'] == 429:
-          print('OCO SELL order limits exceeded ' + open_order[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
-          print('Exiting...')
-          exit()
-        else:
-          break
-  
-  print('OCO order opened! Cancelling pending orders')
-  open_orders = [x for x in open_orders if x[0] != found_pumped[0]]
-  for open_order in open_orders:
-    params = {
-      'symbol': open_order[0],
-      'orderId': open_order[1],
-      'timestamp': round(time.time() * 1000 - 1000)
-    }
-    params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(params).encode('utf-8'), hashlib.sha256).hexdigest()
-
-    response = json.loads(requests.delete(binance_base_url + '/order', params=params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
-
-    if 'code' in response and response['code'] < 0:
-      print('DELETE order ERROR for pair ' + open_order[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
-    elif 'code' in response and response['code'] == 429:
-      print('DELETE order limits exceeded ' + open_order[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
-      print('Exiting...')
-      exit()
-    time.sleep(0.1)
-
-  print('Orders cancelled!')
-  print('Enjoy your money, bye bye!')
 except (ConnectionError, Timeout, TooManyRedirects, Exception) as e:
     print(e)
