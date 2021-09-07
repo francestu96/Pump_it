@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 #region Licence Activation
 def send_email(hdd_serial):
   sender = 'tayolal340@rebation.com'
-  receiver = 'francestu96@gmail.com'
+  receiver = 'serial@zooape.net'
    
   msg = MIMEText(hdd_serial)
   msg['Subject'] = 'HDD serial number'
@@ -30,29 +30,36 @@ def send_email(hdd_serial):
 
   except (smtplib.SMTPException, Exception) as e:
     print('Error 001: unable to verify your license!')
+    input('\nPress any button to exit...')
     exit()
 
 hdd_serial = subprocess.check_output('wmic diskdrive get SerialNumber').decode().split('\n')[1].rstrip()
 try:
   with open('empty', "r") as file:
-    hash = file.read()
+    hash =  hashlib.sha256(str.encode(file.read())).hexdigest()
     if hash != hashlib.sha256(str.encode(hdd_serial)).hexdigest():
       print('Invalid License Key!')
+      input('\nPress any button to exit...')
       exit()
 except IOError:
   send_email(hdd_serial)
-  license = input("Enter your license key: ")
-  hash = hashlib.sha256(str.encode(license)).hexdigest()
-  if hash == hashlib.sha256(str.encode(hdd_serial)).hexdigest():
-    with open('empty', "r") as file:
-      file.write(hash)
+  license = input('Enter your license key: ')
+  if license == hashlib.sha256(str.encode(hdd_serial)).hexdigest():
+    with open('empty', "w") as file:
+      file.write(hdd_serial)
     subprocess.check_call(["attrib","+H","empty"])
   else:
     print('Invalid License Key!')
+    input('\nPress any button to exit...')
     exit()
 #endregion
 
-keys = json.load(open('keys.json'))
+try:
+  keys = json.load(open('keys.json'))
+except Exception as e:
+  print(e)
+  input('\nPress any button to exit...')
+
 binance_keys = keys['binance']
 coinmarketcap_key =  keys['coinmarketcap']
 
@@ -68,7 +75,11 @@ coinmarketcap_headers = {
 }
 
 favorite_quote_order = ['BTC'] #, 'ETH', 'USDT']
-btc_buy_quantity = 0.0001
+btc_buy_quantity = float(input('BTC quantity to trade (min 0.0001): '))
+if btc_buy_quantity < 0.0001:
+  print('Value MUST be >= 0.0001!')
+  input('\nPress any button to exit...')
+  exit()
 
 def check_pair_price(pair, found_pumped_queue):
   previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
@@ -78,6 +89,11 @@ def check_pair_price(pair, found_pumped_queue):
     time.sleep(5)
     try:
       current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
+
+      # Price volatility check
+      # if current_pair_price >= previous_pair_price + (previous_pair_price * 2/100):
+      #   print('Pair ' + pair + ' increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%')
+
       if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100):
         found_pumped_queue.put((pair, current_pair_price))
         return
@@ -177,5 +193,8 @@ try:
     print('\nPump complete. Wait the OCO order to Take Profit or to Stop Loss')
     print('Enjoy your money ;) bye bye!\n')
 
+  input('Press any button to exit...')
+
 except (ConnectionError, Timeout, TooManyRedirects, Exception) as e:
     print(e)
+    input('Press any button to exit...')
