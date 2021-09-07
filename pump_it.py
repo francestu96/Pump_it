@@ -11,6 +11,7 @@ import hashlib
 import time
 import subprocess
 import smtplib
+import os
 from urllib.parse import urlencode
 
 #region Licence Activation
@@ -35,7 +36,7 @@ def send_email(hdd_serial):
 
 hdd_serial = subprocess.check_output('wmic diskdrive get SerialNumber').decode().split('\n')[1].rstrip()
 try:
-  with open('empty', "r") as file:
+  with open(os.path.expanduser('~') + '/empty', "r") as file:
     hash =  hashlib.sha256(str.encode(file.read())).hexdigest()
     if hash != hashlib.sha256(str.encode(hdd_serial)).hexdigest():
       print('Invalid License Key!')
@@ -45,9 +46,9 @@ except IOError:
   send_email(hdd_serial)
   license = input('Enter your license key: ')
   if license == hashlib.sha256(str.encode(hdd_serial)).hexdigest():
-    with open('empty', "w") as file:
+    with open(os.path.expanduser('~') + '/empty', "w") as file:
       file.write(hdd_serial)
-    subprocess.check_call(["attrib","+H","empty"])
+    subprocess.check_call(['attrib', '+H' , os.path.expanduser('~') + '/empty'])
   else:
     print('Invalid License Key!')
     input('\nPress any button to exit...')
