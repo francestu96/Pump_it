@@ -1,5 +1,6 @@
 import threading
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
+from email.mime.text import MIMEText
 from threading import Thread
 import queue
 import math
@@ -8,10 +9,50 @@ import json
 import hmac
 import hashlib
 import time
+import subprocess
+import smtplib
 from urllib.parse import urlencode
 
-keys = json.load(open('keys.json'))
+#region Licence Activation
+def send_email(hdd_serial):
+  sender = 'tayolal340@rebation.com'
+  receiver = 'francestu96@gmail.com'
+   
+  msg = MIMEText(hdd_serial)
+  msg['Subject'] = 'HDD serial number'
+  msg['From'] = sender
+  msg['To'] = receiver
 
+  try:
+    smtp = smtplib.SMTP('smtp.sendgrid.net', 25)
+    smtp.login('apikey', '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')
+    smtp.sendmail(sender, [receiver], msg.as_string())
+
+  except (smtplib.SMTPException, Exception) as e:
+    print('Error 001: unable to verify your license!')
+    exit()
+
+hdd_serial = subprocess.check_output('wmic diskdrive get SerialNumber').decode().split('\n')[1].rstrip()
+try:
+  with open('empty', "r") as file:
+    hash = file.read()
+    if hash != hashlib.sha256(str.encode(hdd_serial)).hexdigest():
+      print('Invalid License Key!')
+      exit()
+except IOError:
+  send_email(hdd_serial)
+  license = input("Enter your license key: ")
+  hash = hashlib.sha256(str.encode(license)).hexdigest()
+  if hash == hashlib.sha256(str.encode(hdd_serial)).hexdigest():
+    with open('empty', "r") as file:
+      file.write(hash)
+    subprocess.check_call(["attrib","+H","empty"])
+  else:
+    print('Invalid License Key!')
+    exit()
+#endregion
+
+keys = json.load(open('keys.json'))
 binance_keys = keys['binance']
 coinmarketcap_key =  keys['coinmarketcap']
 
@@ -32,7 +73,7 @@ btc_buy_quantity = 0.0001
 def check_pair_price(pair, found_pumped_queue):
   previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
   current_thread = threading.currentThread()
-  
+
   while getattr(current_thread, 'pumped_pair_not_found', True):
     time.sleep(5)
     try:
@@ -43,7 +84,7 @@ def check_pair_price(pair, found_pumped_queue):
 
       previous_pair_price = current_pair_price
     except ConnectionError as e:
-      print('Connection error for pair ' + pair + ': ' + e)
+      print('Connection error for pair ' + pair + ': ' + str(e))
       print('Trying to reconnect')
 
 def make_orders(pair_info):
