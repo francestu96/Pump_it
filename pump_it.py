@@ -1,6 +1,7 @@
 import threading
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 from email.mime.text import MIMEText
+from datetime import datetime
 from threading import Thread
 import queue
 import math
@@ -87,13 +88,12 @@ def check_pair_price(pair, found_pumped_queue):
   current_thread = threading.currentThread()
 
   while getattr(current_thread, 'pumped_pair_not_found', True):
-    time.sleep(5)
+    time.sleep(4)
     try:
       current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
 
-      # Price volatility check
-      # if current_pair_price >= previous_pair_price + (previous_pair_price * 2/100):
-      #   print('Pair ' + pair + ' increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%')
+      if current_pair_price >= previous_pair_price + (previous_pair_price * 2/100):
+        print('Pair ' + pair + ' increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%' + ' at ' + datetime.now().strftime("%H:%M:%S"))
 
       if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100):
         found_pumped_queue.put((pair, current_pair_price))
@@ -180,7 +180,7 @@ try:
   print('Checking out which coin will be pumped...\n')
   pumped_pair_info = found_pumped_queue.get()
 
-  print('Pumped pair found!!!')
+  print('Pumped pair found at ' + datetime.now().strftime("%H:%M:%S") + '!!!')
   print(pumped_pair_info[0] + '\n')
   t_make_orders = Thread(target=make_orders, args=(pumped_pair_info,))
   t_close_threads = Thread(target=close_threads, args=(threads,))

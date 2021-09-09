@@ -27,7 +27,7 @@ def check_pair_volatility(pair):
   previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
 
   while True:
-    time.sleep(5)
+    time.sleep(4)
     try:
       current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
 
