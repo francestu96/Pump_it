@@ -29,7 +29,7 @@ def send_email(hdd_serial):
     smtp.login('apikey', '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')
     smtp.sendmail(sender, [receiver], msg.as_string())
 
-  except (smtplib.SMTPException, Exception) as e:
+  except (smtplib.SMTPException, Exception):
     print('Error 001: unable to verify your license!')
     input('\nPress any button to exit...')
     exit()
