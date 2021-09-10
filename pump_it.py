@@ -96,7 +96,7 @@ def check_pair_price(pair, found_pumped_queue):
         print('Pair ' + pair + ' increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%' + ' at ' + datetime.now().strftime("%H:%M:%S"))
 
       if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100):
-        found_pumped_queue.put((pair, current_pair_price))
+        found_pumped_queue.put(pair)
         return
 
       previous_pair_price = current_pair_price
@@ -104,33 +104,36 @@ def check_pair_price(pair, found_pumped_queue):
       print('Connection error for pair ' + pair + ': ' + str(e))
       print('Trying to reconnect')
 
-def make_orders(pair_info):
+def make_orders(pair):
   current_thread = threading.currentThread()
 
   order_params = {
-    'symbol': pair_info[0],
+    'symbol': pair,
     'side': 'BUY',
     'type': 'MARKET',
-    'quantity': '%.0f' % (btc_buy_quantity / pair_info[1]),
+    'quoteOrderQty': str(btc_buy_quantity),
     'timestamp': round(time.time() * 1000 - 1000)
   }
   order_params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(order_params).encode('utf-8'), hashlib.sha256).hexdigest()
 
   response = json.loads(requests.post(binance_base_url + '/order', params=order_params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
   if 'code' in response and (response['code'] < 0 or response['code'] == 429):
-    print('\nMARKET order ERROR for pair ' + pair_info[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
+    print('\nMARKET order ERROR for pair ' + pair + ' -> code ' + str(response['code']) + ': ' + response['msg'])
     print('Exiting...\n')
     setattr(current_thread, 'error', True)
     return
 
-  print('Pair ' + pair_info[0] + ' bought at market price!')
+  buyQuantity = response['executedQty']
+  buyPrice = float(response['fills'][0]['price'])
+
+  print('Pair ' + pair + ' bought at market price!')
   oco_order_params = {
-    'symbol': pair_info[0],
+    'symbol': pair,
     'side': 'SELL',            
-    'quantity': '%.0f' % math.ceil(btc_buy_quantity / (pair_info[1] - (pair_info[1] * 5/100))),
-    'price': ('%.8f' % (pair_info[1] + (pair_info[1]) * 50/100)).rstrip('0').rstrip('.'),
-    'stopPrice': ('%.8f' % (pair_info[1] - (pair_info[1] * 5/100))).rstrip('0').rstrip('.'),
-    'stopLimitPrice': ('%.8f' % (pair_info[1] - (pair_info[1] * 5/100))).rstrip('0').rstrip('.'),
+    'quantity': str(buyQuantity),
+    'price': ('%.8f' % (buyPrice + (buyPrice * 50/100))).rstrip('0').rstrip('.'),
+    'stopPrice': ('%.8f' % (buyPrice - (buyPrice * 5/100))).rstrip('0').rstrip('.'),
+    'stopLimitPrice': ('%.8f' % (buyPrice - (buyPrice * 5/100))).rstrip('0').rstrip('.'),
     'stopLimitTimeInForce': 'GTC',
     'timestamp': round(time.time() * 1000 - 1000)
   }
@@ -138,12 +141,12 @@ def make_orders(pair_info):
   response = json.loads(requests.post(binance_base_url + '/order/oco', params=oco_order_params, headers={'X-MBX-APIKEY': binance_keys['api_key']}).text)
   
   if 'code' in response and (response['code'] < 0 or response['code'] == 429):
-    print('\nOCO SELL order ERROR for pair ' + pair_info[0] + ' -> code ' + str(response['code']) + ': ' + response['msg'])
+    print('\nOCO SELL order ERROR for pair ' + pair + ' -> code ' + str(response['code']) + ': ' + response['msg'])
     print('Exiting...\n')
     setattr(current_thread, 'error', True)
     return
   
-  print('OCO ORDER for Pair ' + pair_info[0] + ' placed!')
+  print('OCO ORDER for Pair ' + pair + ' placed!')
   return
 
 def close_threads(threads):
@@ -178,11 +181,11 @@ try:
 
   print('\nDO NOT CLOSE THE PROMPT')
   print('Checking out which coin will be pumped...\n')
-  pumped_pair_info = found_pumped_queue.get()
+  pumped_pair = found_pumped_queue.get()
 
   print('Pumped pair found at ' + datetime.now().strftime("%H:%M:%S") + '!!!')
-  print(pumped_pair_info[0] + '\n')
-  t_make_orders = Thread(target=make_orders, args=(pumped_pair_info,))
+  print(pumped_pair + '\n')
+  t_make_orders = Thread(target=make_orders, args=(pumped_pair,))
   t_close_threads = Thread(target=close_threads, args=(threads,))
 
   t_make_orders.start()
