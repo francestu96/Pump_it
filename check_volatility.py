@@ -61,6 +61,9 @@ try:
                 print('Checking pair: ' + base + favorite_quote)
                 threads.append(Thread(target=check_pair_volatility, args=(base + favorite_quote,)))
                 threads[-1].start() 
+  
+    print('\nTotal number of checking pairs: ' + str(len(threads)))
+
 
 except (ConnectionError, Timeout, TooManyRedirects, Exception) as e:
     print(e)
