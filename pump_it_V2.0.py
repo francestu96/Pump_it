@@ -171,9 +171,7 @@ def start():
           threads.append(Thread(target=check_pair_price, args=(base + favorite_quote, found_pumped_queue,)))
           threads[-1].start() 
 
-    print('\nDO NOT CLOSE THE PROMPT')
     print('Total number of checking pairs: ' + str(len(threads)))
-    print('Checking out which coin will be pumped...\n')
 
     try:
       pumped_pair = found_pumped_queue.get(timeout=10)
@@ -192,7 +190,7 @@ def start():
       input('Press any button to exit...')
       exit(1)
 
-schedule.every(59).minutes.at(":55").do(start)
+schedule.every().hour.at("59:55").do(start)
 while True:
     schedule.run_pending()
-    time.sleep(5)
+    time.sleep(1)
