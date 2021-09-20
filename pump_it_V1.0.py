@@ -69,7 +69,8 @@ binance_base_url = 'https://api.binance.com/api/v3'
 coinmarketcap_url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
 coinmarketcap_parameters = {
   'limit':'5000',
-  'market_cap_max':'60000000'
+  'market_cap_max':'100000000',
+  'market_cap_min':'500000'
 }
 coinmarketcap_headers = {
   'Accepts': 'application/json',

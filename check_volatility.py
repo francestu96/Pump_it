@@ -16,7 +16,8 @@ binance_base_url = 'https://api.binance.com/api/v3'
 coinmarketcap_url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
 coinmarketcap_parameters = {
   'limit':'5000',
-  'market_cap_max':'60000000'
+  'market_cap_max':'100000000',
+  'market_cap_min':'500000'
 }
 coinmarketcap_headers = {
   'Accepts': 'application/json',
@@ -29,9 +30,11 @@ def check_pair_volatility(pair):
   while True:
     time.sleep(4)
     try:
-      current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
+      response = requests.get(binance_base_url + '/ticker/price?symbol=' + pair)
+      print('Max weight: 1200. Current weight: ' + response.headers['x-mbx-used-weight'])
+      current_pair_price = float(json.loads(response.text)['price'])
 
-      if current_pair_price >= previous_pair_price + (previous_pair_price * 2/100):
+      if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100):
         print('Pair ' + pair + ' increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%' + ' at ' + datetime.now().strftime("%H:%M:%S"))
 
       previous_pair_price = current_pair_price
