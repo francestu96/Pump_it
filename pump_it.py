@@ -92,12 +92,12 @@ def check_pair_price(pair, found_pumped_queue):
     # print('Pair ' + pair + ' price: ' + ('%.8f' % previous_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S"))
 
     next_hour = datetime.now() + timedelta(hours = 1)
-    pause.until(next_hour.replace(minute=0, second=1, microsecond=0))
+    pause.until(next_hour.replace(minute=0, second=2, microsecond=0))
 
     current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
     # print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S") + ' (increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
 
-    if current_pair_price >= previous_pair_price + (previous_pair_price * 10/100):
+    if current_pair_price >= previous_pair_price + (previous_pair_price * 5/100):
       found_pumped_queue.put(pair)
 
   except ConnectionError as e:
@@ -190,7 +190,7 @@ def start():
       input('Press any button to exit...')
       exit(1)
 
-schedule.every().hour.at("59:55").do(start)
+schedule.every().hour.at("59:57").do(start)
 while True:
     schedule.run_pending()
     time.sleep(1)
