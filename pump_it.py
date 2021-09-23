@@ -65,8 +65,11 @@ except Exception as e:
   input('\nPress any button to exit...')
 
 SEC_TO_FIRST_CHECK = 57
-SEC_AFER_HOUR_TO_RECHECK = 2
+MICROSEC_AFER_HOUR_TO_RECHECK = 500000
 CHANGE_TO_DETECT = 5
+
+TAKE_PROFIT = 50
+STOP_LOSS = 5
 
 binance_keys = keys['binance']
 coinmarketcap_key =  keys['coinmarketcap']
@@ -96,7 +99,7 @@ def check_pair_price(pair, found_pumped_queue):
     # print('Pair ' + pair + ' price: ' + ('%.8f' % previous_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S"))
 
     next_hour = datetime.now() + timedelta(hours = 1)
-    pause.until(next_hour.replace(minute=0, second=SEC_AFER_HOUR_TO_RECHECK, microsecond=0))
+    pause.until(next_hour.replace(minute=0, second=0, microsecond=MICROSEC_AFER_HOUR_TO_RECHECK))
 
     current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
     # print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S") + ' (increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
@@ -131,9 +134,9 @@ def make_orders(pair):
     'symbol': pair,
     'side': 'SELL',            
     'quantity': str(buyQuantity),
-    'price': ('%.8f' % (buyPrice + (buyPrice * 50/100))).rstrip('0').rstrip('.'),
-    'stopPrice': ('%.8f' % (buyPrice - (buyPrice * 5/100))).rstrip('0').rstrip('.'),
-    'stopLimitPrice': ('%.8f' % (buyPrice - (buyPrice * 5/100))).rstrip('0').rstrip('.'),
+    'price': ('%.8f' % (buyPrice + (buyPrice * TAKE_PROFIT/100))).rstrip('0').rstrip('.'),
+    'stopPrice': ('%.8f' % (buyPrice - (buyPrice * STOP_LOSS/100))).rstrip('0').rstrip('.'),
+    'stopLimitPrice': ('%.8f' % (buyPrice - (buyPrice * STOP_LOSS/100))).rstrip('0').rstrip('.'),
     'stopLimitTimeInForce': 'GTC',
     'timestamp': round(time.time() * 1000 - 1000)
   }
@@ -171,7 +174,7 @@ def start():
     for base in good_trading_pairs_grouped:
       for favorite_quote in favorite_quote_order:
         if favorite_quote in good_trading_pairs_grouped[base]:
-          print('Checking pair: ' + base + favorite_quote)
+          # print('Checking pair: ' + base + favorite_quote)
           threads.append(Thread(target=check_pair_price, args=(base + favorite_quote, found_pumped_queue,)))
           threads[-1].start() 
 
