@@ -1,0 +1,19 @@
+1. Registrarsi e creare una chiave API per CoinMarketCap.com
+
+2. Registrarsi e creare una chiave API e una chiave segreta per Binance.com (https://www.binance.com/it/support/faq/360002502072)
+
+3. Su Binance, nei permessi della API, spuntare "Abilita il trading spot e a margine"
+
+4. Nella cartella "Pump It", è presente un file "keys.json". Copiare e incollare tra le virgolette le relative chiavi precedentemente generate
+
+5. Per far partire il programma serve una chiave di licenza unica che vi devo fornire personalmente. Contattatemi prima di far partire il programma!
+
+7. Spostate la cartella "Pump It" dove più vi aggrada, per esempio in C:\Program Files
+
+8. ATTENZIONE!!! Una volta spostata la cartella e inserito la licenza, non sarà più possibile spostarlo se non richiedendo nuovamente l'attivazione
+
+9. Creare un collegamento al file "pump_it" (click destro -> crea collegamento) e spostarlo dove si desidera, per esempio sul Desktop
+
+10. Doppio click sul collegamento per avviare il programma!
+
+NB: una volta inserita la licenza non sarà più necessario inserirla nuovamente

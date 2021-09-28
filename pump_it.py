@@ -64,13 +64,6 @@ except Exception as e:
   print(e)
   input('\nPress any button to exit...')
 
-SEC_TO_FIRST_CHECK = 57
-MICROSEC_AFER_HOUR_TO_RECHECK = 500000
-CHANGE_TO_DETECT = 5
-
-TAKE_PROFIT = 50
-STOP_LOSS = 5
-
 binance_keys = keys['binance']
 coinmarketcap_key =  keys['coinmarketcap']
 
@@ -87,24 +80,30 @@ coinmarketcap_headers = {
 }
 
 favorite_quote_order = ['BTC'] #, 'ETH', 'USDT']
-btc_buy_quantity = float(input('BTC quantity to trade (min 0.0001): '))
-if btc_buy_quantity < 0.0001:
+
+BTC_BUY_QUANTITY = float(input('BTC quantity to trade (min 0.0001): '))
+if BTC_BUY_QUANTITY < 0.0001:
   print('Value MUST be >= 0.0001!')
   input('\nPress any button to exit...')
   exit()
 
+SEC_TO_FIRST_CHECK = int(input('Seconds before the PUMP begin to check pairs values (default 3): ') or '3')
+SEC_AFER_HOUR_TO_RECHECK = float(input('Seconds after the PUMP begin to check pairs values (default 0.5): ') or '0.5')
+CHANGE_TO_DETECT = int(input('Percentage to trigger the PUMP (default 5): ') or '5')
+TAKE_PROFIT = int(input('Percentage Take Profit (default 50): ') or '50')
+STOP_LOSS = int(input('Percentage Stop Loss (default 5): ') or '5')
+
 def check_pair_price(pair, found_pumped_queue):
   try:
     previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
-    # print('Pair ' + pair + ' price: ' + ('%.8f' % previous_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S"))
 
     next_hour = datetime.now() + timedelta(hours = 1)
-    pause.until(next_hour.replace(minute=0, second=0, microsecond=MICROSEC_AFER_HOUR_TO_RECHECK))
+    pause.until(next_hour.replace(minute=0, second=int(SEC_AFER_HOUR_TO_RECHECK), microsecond=int((SEC_AFER_HOUR_TO_RECHECK * 1000000) % 1000000)))
 
     current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
-    # print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S") + ' (increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
 
     if current_pair_price >= previous_pair_price + (previous_pair_price * CHANGE_TO_DETECT/100):
+      print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S") + ' (increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
       found_pumped_queue.put(pair)
 
   except ConnectionError as e:
@@ -115,7 +114,7 @@ def make_orders(pair):
     'symbol': pair,
     'side': 'BUY',
     'type': 'MARKET',
-    'quoteOrderQty': str(btc_buy_quantity),
+    'quoteOrderQty': str(BTC_BUY_QUANTITY),
     'timestamp': round(time.time() * 1000 - 1000)
   }
   order_params['signature'] = hmac.new(str.encode(binance_keys['secret_key']), urlencode(order_params).encode('utf-8'), hashlib.sha256).hexdigest()
@@ -197,7 +196,7 @@ def start():
       input('Press any button to exit...')
       exit(1)
 
-schedule.every().hour.at("59:" + str(SEC_TO_FIRST_CHECK)).do(start)
+schedule.every().hour.at("59:" + str(60 - SEC_TO_FIRST_CHECK)).do(start)
 while True:
     schedule.run_pending()
     time.sleep(1)
