@@ -87,7 +87,7 @@ if BTC_BUY_QUANTITY < 0.0001:
   input('\nPress any button to exit...')
   exit()
 
-SEC_TO_FIRST_CHECK = int(input('Seconds before the PUMP begin to check pairs values (default 3): ') or '3')
+SEC_TO_FIRST_CHECK = int(input('Seconds before the PUMP begin to check pairs values (default 5): ') or '5')
 SEC_AFER_HOUR_TO_RECHECK = float(input('Seconds after the PUMP begin to check pairs values (default 0.5): ') or '0.5')
 CHANGE_TO_DETECT = int(input('Percentage to trigger the PUMP (default 5): ') or '5')
 TAKE_PROFIT = int(input('Percentage Take Profit (default 50): ') or '50')
@@ -103,7 +103,7 @@ def check_pair_price(pair, found_pumped_queue):
     current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
 
     if current_pair_price >= previous_pair_price + (previous_pair_price * CHANGE_TO_DETECT/100):
-      print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S") + ' (increased of ' + ('%.8f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
+      print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S.%f") + ' (increased of ' + ('%.2f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
       found_pumped_queue.put(pair)
 
   except ConnectionError as e:
@@ -153,12 +153,13 @@ def make_orders(pair):
 def start():
   try:
     # good_trading_pairs_grouped = {'SNM': ['BTC'], 'MDA': ['BTC'], 'MTH': ['BTC'], 'AST': ['BTC'], 'OAX': ['BTC'], 'EVX': ['BTC'], 'VIB': ['BTC', 'ETH'], 'RDN': ['BTC'], 'DLT': ['BTC'], 'AMB': ['BTC'], 'GVT': ['BTC'], 'QSP': ['BTC', 'ETH'], 'BTS': ['BTC', 'USDT'], 'CND': ['BTC']}
+    bad_pairs = ['PHBBTC']
 
     response = requests.get(coinmarketcap_url, params=coinmarketcap_parameters, headers=coinmarketcap_headers)
     low_market_symbols = [x['symbol'] for x in json.loads(response.text)['data']]
 
     response = requests.get(binance_base_url + '/exchangeInfo')
-    binance_pairs = json.loads(response.text)['symbols']
+    binance_pairs = [x for x in json.loads(response.text)['symbols'] if x['symbol'] not in bad_pairs]
 
     good_trading_pairs = [(x['baseAsset'], x['quoteAsset']) for x in binance_pairs if x['baseAsset'] in low_market_symbols and x['status'] == 'TRADING']
     good_trading_pairs_grouped = {}
@@ -181,7 +182,7 @@ def start():
 
     try:
       pumped_pair = found_pumped_queue.get(timeout=10)
-      print('Pumped pair found at ' + datetime.now().strftime("%H:%M:%S") + '!!!')
+      print('Pumped pair found at ' + datetime.now().strftime("%H:%M:%S.%f") + '!!!')
       print(pumped_pair + '\n')
 
       if make_orders(pumped_pair):
@@ -189,7 +190,7 @@ def start():
         print('Enjoy your money ;)\n')
 
     except (queue.Empty):
-      print('No pumped pair at ' + datetime.now().strftime("%H:%M:%S"))
+      print('No pumped pair at ' + datetime.now().strftime("%H:%M:%S.%f"))
 
   except (ConnectionError, Timeout, TooManyRedirects, Exception) as e:
       print(e)
@@ -199,4 +200,4 @@ def start():
 schedule.every().hour.at("59:" + str(60 - SEC_TO_FIRST_CHECK)).do(start)
 while True:
     schedule.run_pending()
-    time.sleep(1)
+    time.sleep(0.5)
