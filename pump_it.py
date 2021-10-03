@@ -1,11 +1,9 @@
-import threading
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 from email.mime.text import MIMEText
 from datetime import datetime
 from datetime import timedelta
 from threading import Thread, currentThread
 import queue
-import pause
 import schedule
 import requests
 import json
@@ -97,13 +95,13 @@ def check_pair_price(pair, found_pumped_queue):
   try:
     previous_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
 
-    next_hour = datetime.now() + timedelta(hours = 1)
-    pause.until(next_hour.replace(minute=0, second=int(SEC_AFER_HOUR_TO_RECHECK), microsecond=int((SEC_AFER_HOUR_TO_RECHECK * 1000000) % 1000000)))
+    trigger_time = (datetime.now() + timedelta(hours = 1)).replace(minute=0, second=int(SEC_AFER_HOUR_TO_RECHECK), microsecond=int((SEC_AFER_HOUR_TO_RECHECK * 1000000) % 1000000))
+    time.sleep((trigger_time-datetime.now()).total_seconds())
 
     current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
 
     if current_pair_price >= previous_pair_price + (previous_pair_price * CHANGE_TO_DETECT/100):
-      print('Pair ' + pair + 'price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S.%f") + ' (increased of ' + ('%.2f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
+      print('Pair ' + pair + ' price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S.%f") + ' (increased of ' + ('%.2f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
       found_pumped_queue.put(pair)
 
   except ConnectionError as e:
