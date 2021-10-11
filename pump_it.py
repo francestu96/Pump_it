@@ -2,7 +2,8 @@ from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 from email.mime.text import MIMEText
 from datetime import datetime
 from datetime import timedelta
-from threading import Thread, currentThread
+from threading import Thread
+from logging.handlers import TimedRotatingFileHandler
 import queue
 import schedule
 import requests
@@ -10,6 +11,7 @@ import json
 import hmac
 import hashlib
 import time
+import logging
 import subprocess
 import smtplib
 import os
@@ -62,6 +64,14 @@ except Exception as e:
   print(e)
   input('\nPress any button to exit...')
 
+log_path = "debug/pump_it.log"
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = TimedRotatingFileHandler(log_path, when="midnight", interval=1)
+handler.setFormatter(logging.Formatter('%(message)s'))
+handler.suffix = "%d%m%Y"
+logger.addHandler(handler)
+
 binance_keys = keys['binance']
 coinmarketcap_key =  keys['coinmarketcap']
 
@@ -70,7 +80,7 @@ coinmarketcap_url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listing
 coinmarketcap_parameters = {
   'limit':'5000',
   'market_cap_max':'100000000',
-  'market_cap_min':'500000'
+  'market_cap_min':'20000000'
 }
 coinmarketcap_headers = {
   'Accepts': 'application/json',
@@ -99,6 +109,8 @@ def check_pair_price(pair, found_pumped_queue):
     time.sleep((trigger_time-datetime.now()).total_seconds())
 
     current_pair_price = float(json.loads(requests.get(binance_base_url + '/ticker/price?symbol=' + pair).text)['price'])
+
+    logger.info('Pair %s price increased of %s%% at %s', pair, ('%.2f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.'), datetime.now().strftime("%H:%M:%S.%f"))
 
     if current_pair_price >= previous_pair_price + (previous_pair_price * CHANGE_TO_DETECT/100):
       print('Pair ' + pair + ' price: ' + ('%.8f' % current_pair_price).rstrip('0').rstrip('.') + ' at ' + datetime.now().strftime("%H:%M:%S.%f") + ' (increased of ' + ('%.2f' % ((current_pair_price - previous_pair_price) * 100 / current_pair_price)).rstrip('0').rstrip('.') + '%)')
@@ -151,7 +163,7 @@ def make_orders(pair):
 def start():
   try:
     # good_trading_pairs_grouped = {'SNM': ['BTC'], 'MDA': ['BTC'], 'MTH': ['BTC'], 'AST': ['BTC'], 'OAX': ['BTC'], 'EVX': ['BTC'], 'VIB': ['BTC', 'ETH'], 'RDN': ['BTC'], 'DLT': ['BTC'], 'AMB': ['BTC'], 'GVT': ['BTC'], 'QSP': ['BTC', 'ETH'], 'BTS': ['BTC', 'USDT'], 'CND': ['BTC']}
-    bad_pairs = ['PHBBTC']
+    bad_pairs = ['PHBBTC', 'AKROBTC', 'QSPBTC', 'FXSBTC', 'MITHBTC', 'DEGOBTC', 'BARBTC', 'RDNBTC', 'FIROBTC']
 
     response = requests.get(coinmarketcap_url, params=coinmarketcap_parameters, headers=coinmarketcap_headers)
     low_market_symbols = [x['symbol'] for x in json.loads(response.text)['data']]
@@ -172,7 +184,6 @@ def start():
     for base in good_trading_pairs_grouped:
       for favorite_quote in favorite_quote_order:
         if favorite_quote in good_trading_pairs_grouped[base]:
-          # print('Checking pair: ' + base + favorite_quote)
           threads.append(Thread(target=check_pair_price, args=(base + favorite_quote, found_pumped_queue,)))
           threads[-1].start() 
 
@@ -189,6 +200,7 @@ def start():
 
     except (queue.Empty):
       print('No pumped pair at ' + datetime.now().strftime("%H:%M:%S.%f"))
+      logger.info('< ----------------------------------------------------------------------------------------- >')
 
   except (ConnectionError, Timeout, TooManyRedirects, Exception) as e:
       print(e)
