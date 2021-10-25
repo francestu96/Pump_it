@@ -80,7 +80,7 @@ coinmarketcap_url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listing
 coinmarketcap_parameters = {
   'limit':'5000',
   'market_cap_max':'100000000',
-  'market_cap_min':'20000000'
+  'market_cap_min':'1000000'
 }
 coinmarketcap_headers = {
   'Accepts': 'application/json',
