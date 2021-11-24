@@ -1,27 +1,17 @@
+import sys, queue, schedule, requests, json, hmac, hashlib, time, logging, subprocess, smtplib, os
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 from email.mime.text import MIMEText
 from datetime import datetime
 from datetime import timedelta
 from threading import Thread
 from logging.handlers import TimedRotatingFileHandler
-import queue
-import schedule
-import requests
-import json
-import hmac
-import hashlib
-import time
-import logging
-import subprocess
-import smtplib
-import os
 from urllib.parse import urlencode
 
 #region Licence Activation
 # def send_email(hdd_serial):
 #   sender = 'tayolal340@rebation.com'
 #   receiver = 'serial@zooape.net'
-   
+  
 #   msg = MIMEText(hdd_serial)
 #   msg['Subject'] = 'HDD serial number'
 #   msg['From'] = sender
@@ -34,8 +24,7 @@ from urllib.parse import urlencode
 
 #   except (smtplib.SMTPException, Exception):
 #     print('Error 001: unable to verify your license!')
-#     input('\nPress any button to exit...')
-#     exit()
+#     sys.exit(1)
 
 # hdd_serial = subprocess.check_output('wmic diskdrive get SerialNumber').decode().split('\n')[1].rstrip()
 # try:
@@ -43,8 +32,7 @@ from urllib.parse import urlencode
 #     hash =  hashlib.sha256(str.encode(file.read())).hexdigest()
 #     if hash != hashlib.sha256(str.encode(hdd_serial)).hexdigest():
 #       print('Invalid License Key!')
-#       input('\nPress any button to exit...')
-#       exit()
+#       sys.exit(1)
 # except IOError:
 #   send_email(hdd_serial)
 #   license = input('Enter your license key: ')
@@ -54,15 +42,13 @@ from urllib.parse import urlencode
 #     subprocess.check_call(['attrib', '+H' , os.path.expanduser('~') + '/empty'])
 #   else:
 #     print('Invalid License Key!')
-#     input('\nPress any button to exit...')
-#     exit()
+#     sys.exit(1)
 #endregion
 
 try:
   keys = json.load(open('keys.json'))
 except Exception as e:
   print(e)
-  input('\nPress any button to exit...')
 
 log_path = "debug/pump_it.log"
 logger = logging.getLogger()
@@ -89,17 +75,21 @@ coinmarketcap_headers = {
 
 favorite_quote_order = ['BTC'] #, 'ETH', 'USDT']
 
-BTC_BUY_QUANTITY = float(input('BTC quantity to trade (min 0.0001): '))
-if BTC_BUY_QUANTITY < 0.0001:
-  print('Value MUST be >= 0.0001!')
-  input('\nPress any button to exit...')
-  exit()
+SEC_TO_FIRST_CHECK = 5
+SEC_AFER_HOUR_TO_RECHECK = 0.1
+CHANGE_TO_DETECT = 5
+TAKE_PROFIT = 50
+STOP_LOSS = 20
 
-SEC_TO_FIRST_CHECK = int(input('Seconds before the PUMP begin to check pairs values (default 5): ') or '5')
-SEC_AFER_HOUR_TO_RECHECK = float(input('Seconds after the PUMP begin to check pairs values (default 0.5): ') or '0.5')
-CHANGE_TO_DETECT = int(input('Percentage to trigger the PUMP (default 5): ') or '5')
-TAKE_PROFIT = int(input('Percentage Take Profit (default 50): ') or '50')
-STOP_LOSS = int(input('Percentage Stop Loss (default 5): ') or '5')
+try:
+  BTC_BUY_QUANTITY = float(sys.argv[1] if len(sys.argv) > 1 else '')
+except ValueError:
+  print ('pump_it.py <BTC quantity>')
+  sys.exit(1)
+
+if BTC_BUY_QUANTITY < 0.0001:
+  print('BTC value MUST be >= 0.0001')
+  sys.exit(1)
 
 def check_pair_price(pair, found_pumped_queue):
   try:
@@ -197,6 +187,8 @@ def start():
       if make_orders(pumped_pair):
         print('\nPump complete. Wait the OCO order to Take Profit or to Stop Loss')
         print('Enjoy your money ;)\n')
+        
+      sys.exit(0)
 
     except (queue.Empty):
       print('No pumped pair at ' + datetime.now().strftime("%H:%M:%S.%f"))
@@ -204,8 +196,7 @@ def start():
 
   except (ConnectionError, Timeout, TooManyRedirects, Exception) as e:
       print(e)
-      input('Press any button to exit...')
-      exit(1)
+      sys.exit(1)
 
 schedule.every().hour.at("59:" + str(60 - SEC_TO_FIRST_CHECK)).do(start)
 while True:
